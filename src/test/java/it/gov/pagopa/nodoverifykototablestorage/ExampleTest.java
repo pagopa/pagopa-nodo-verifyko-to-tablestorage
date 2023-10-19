@@ -1,4 +1,4 @@
-package it.gov.pagopa.project;
+package it.gov.pagopa.nodoverifykototablestorage;
 
 import com.microsoft.azure.functions.ExecutionContext;
 import com.microsoft.azure.functions.HttpRequestMessage;
