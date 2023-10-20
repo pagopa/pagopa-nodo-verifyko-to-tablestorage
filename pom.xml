@@ -43,6 +43,10 @@
             <artifactId>azure-functions-java-library</artifactId>
             <version>${azure.functions.java.library.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.azure</groupId>
+            <artifactId>azure-data-tables</artifactId>
+        </dependency>
 
         <!-- End Azure -->
 
@@ -150,12 +154,6 @@
             <artifactId>jackson-datatype-jsr310</artifactId>
             <version>2.15.2</version>
         </dependency>
-
-        <!--        <dependency>-->
-        <!--            <groupId>org.mongodb</groupId>-->
-        <!--            <artifactId>mongo-java-driver</artifactId>-->
-        <!--            <version>3.4.2</version>-->
-        <!--        </dependency>-->
 
         <!-- Jackson END-->
 
