@@ -4,8 +4,8 @@ import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
-import it.gov.pagopa.nodoverifykotodatastore.util.AppInfo;
-import it.gov.pagopa.nodoverifykotodatastore.util.Constants;
+import it.gov.pagopa.nodoverifykototablestorage.util.AppInfo;
+import it.gov.pagopa.nodoverifykototablestorage.util.Constants;
 
 import java.io.InputStream;
 import java.util.Optional;
