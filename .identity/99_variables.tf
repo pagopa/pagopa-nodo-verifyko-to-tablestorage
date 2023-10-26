@@ -22,7 +22,7 @@ locals {
   }
 
   function_deployment = {
-    resource_group           = "${local.prefix}-${var.env_short}-${local.location_short}-nodo-verifyko-to-tablestorage-rg",
+    resource_group           = "${local.prefix}-${var.env_short}-${local.location_short}-nodo-verifyko-to-datastore-rg",
     app_name                 = "${local.prefix}-${var.env_short}-${local.location_short}-nodo-verifyko2ts-fn"
     container_registry_image = "ghcr.io/pagopa/pagopa-nodo-verifyko-to-tablestorage"
   }
