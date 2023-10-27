@@ -33,7 +33,7 @@
       "Host.Results": "Error",
       "Function": "Information",
       "Function.EventHubNodoVerifyKOEventToTSProcessor": "Trace",
-      "Host.Aggregator": "Trace"
+      "Host.Aggregator": "Information"
     }
   }
 }
