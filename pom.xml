@@ -47,6 +47,10 @@
             <groupId>com.azure</groupId>
             <artifactId>azure-data-tables</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.azure</groupId>
+            <artifactId>azure-storage-blob</artifactId>
+        </dependency>
 
         <!-- End Azure -->
 

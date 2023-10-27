@@ -1,25 +1,31 @@
 package it.gov.pagopa.nodoverifykototablestorage;
 
+import com.azure.core.util.BinaryData;
 import com.azure.data.tables.TableClient;
 import com.azure.data.tables.TableServiceClient;
 import com.azure.data.tables.TableServiceClientBuilder;
 import com.azure.data.tables.models.TableEntity;
 import com.azure.data.tables.models.TableTransactionAction;
 import com.azure.data.tables.models.TableTransactionActionType;
+import com.azure.storage.blob.BlobClient;
+import com.azure.storage.blob.BlobContainerClient;
+import com.azure.storage.blob.BlobServiceClient;
+import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.microsoft.azure.functions.ExecutionContext;
 import com.microsoft.azure.functions.annotation.*;
+import it.gov.pagopa.nodoverifykototablestorage.exception.BlobStorageUploadException;
+import it.gov.pagopa.nodoverifykototablestorage.model.BlobBodyReference;
 import it.gov.pagopa.nodoverifykototablestorage.util.Constants;
 import it.gov.pagopa.nodoverifykototablestorage.util.ObjectMapperUtils;
 
-import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
-import java.util.zip.Deflater;
-import java.util.zip.DeflaterOutputStream;
 
 /**
  * Azure Functions with Azure Event Hub trigger.
@@ -28,6 +34,8 @@ import java.util.zip.DeflaterOutputStream;
 public class NodoVerifyKOEventToTableStorage {
 
 	private static TableServiceClient tableServiceClient = null;
+
+	private static BlobContainerClient blobContainerClient = null;
 
 	@FunctionName("EventHubNodoVerifyKOEventToTSProcessor")
     public void processNodoVerifyKOEvent (
@@ -56,22 +64,22 @@ public class NodoVerifyKOEventToTableStorage {
 					// update event with the required parameters and other needed fields
 					properties[index].forEach((property, value) -> eventToBeStored.put(replaceDashWithUppercase(property), value));
 
-					String insertedTimestampValue = getEventField(event, Constants.INSERTED_TIMESTAMP_EVENT_FIELD, String.class, Constants.NA);
-					String insertedDateValue = Constants.NA.equals(insertedTimestampValue) ? Constants.NA : insertedTimestampValue.substring(0, 10);
+					Long insertedTimestampValue = getEventField(event, Constants.FAULTBEAN_TIMESTAMP_EVENT_FIELD, Integer.class, 0).longValue();
+					String insertedDateValue = insertedTimestampValue == 0L ? Constants.NA : new SimpleDateFormat("yyyy-MM-dd").format(new Date(insertedTimestampValue));
 
 					// inserting the identification columns on event saved in Table Storage
+					String rowKey = generateRowKey(event, String.valueOf(insertedTimestampValue));
 					eventToBeStored.put(Constants.PARTITION_KEY_TABLESTORAGE_EVENT_FIELD, insertedDateValue);
-					eventToBeStored.put(Constants.ROW_KEY_TABLESTORAGE_EVENT_FIELD, generateRowKey(event, insertedTimestampValue));
+					eventToBeStored.put(Constants.ROW_KEY_TABLESTORAGE_EVENT_FIELD, rowKey);
 
 					// inserting the additional columns on event saved in Table Storage
-					eventToBeStored.put(Constants.UNIQUE_ID_TABLESTORAGE_EVENT_FIELD, event.get(Constants.ID_EVENT_FIELD));
 					eventToBeStored.put(Constants.TIMESTAMP_TABLESTORAGE_EVENT_FIELD, insertedTimestampValue);
 					eventToBeStored.put(Constants.NOTICE_NUMBER_TABLESTORAGE_EVENT_FIELD, getEventField(event, Constants.NOTICE_NUMBER_EVENT_FIELD, String.class, Constants.NA));
 					eventToBeStored.put(Constants.ID_PA_TABLESTORAGE_EVENT_FIELD, getEventField(event, Constants.ID_PA_EVENT_FIELD, String.class, Constants.NA));
 					eventToBeStored.put(Constants.ID_PSP_TABLESTORAGE_EVENT_FIELD, getEventField(event, Constants.ID_PSP_EVENT_FIELD, String.class, Constants.NA));
 					eventToBeStored.put(Constants.ID_STATION_TABLESTORAGE_EVENT_FIELD, getEventField(event, Constants.ID_STATION_EVENT_FIELD, String.class, Constants.NA));
 					eventToBeStored.put(Constants.ID_CHANNEL_TABLESTORAGE_EVENT_FIELD, getEventField(event, Constants.ID_CHANNEL_EVENT_FIELD, String.class, Constants.NA));
-					eventToBeStored.put(Constants.PAYLOAD_TABLESTORAGE_EVENT_FIELD, new String(Base64.getEncoder().encode(eventInStringForm.getBytes()))); // TODO to be refactored
+					eventToBeStored.put(Constants.BLOB_BODY_REFERENCE_TABLESTORAGE_EVENT_FIELD, storeBodyInBlobAndGetReference(eventInStringForm, rowKey));
 
 					addToBatch(partitionedEvents, eventToBeStored);
 				}
@@ -79,9 +87,11 @@ public class NodoVerifyKOEventToTableStorage {
 				// save all events in the retrieved batch in the storage
 				persistEventBatch(logger, partitionedEvents);
 			}
+		} catch (BlobStorageUploadException e) {
+			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] Persistence Exception - Could not save event body on Azure Blob Storage, error: " + e);
 		} catch (NullPointerException e) {
 			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] AppException - NullPointerException exception on table storage nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e.getMessage());
-		} catch (Throwable e) {
+		} catch (Exception e) {
 			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] AppException - Generic exception on table storage nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e.getMessage());
 		}
     }
@@ -123,9 +133,17 @@ public class NodoVerifyKOEventToTableStorage {
 		return tableServiceClient;
 	}
 
+	private static BlobContainerClient getBlobContainerClient(){
+		if (blobContainerClient == null) {
+			BlobServiceClient blobServiceClient = new BlobServiceClientBuilder().connectionString(System.getenv("BLOB_STORAGE_CONN_STRING")).buildClient();
+			blobContainerClient = blobServiceClient.createBlobContainerIfNotExists(Constants.BLOB_NAME);
+		}
+		return blobContainerClient;
+	}
+
 	private void addToBatch(Map<String,List<TableTransactionAction>> partitionEvents, Map<String, Object> event) {
-		if (event.get(Constants.UNIQUE_ID_TABLESTORAGE_EVENT_FIELD) != null) {
-			TableEntity entity = new TableEntity((String) event.get(Constants.PARTITION_KEY_TABLESTORAGE_EVENT_FIELD), (String) event.get(Constants.UNIQUE_ID_TABLESTORAGE_EVENT_FIELD));
+		if (event.get(Constants.ROW_KEY_TABLESTORAGE_EVENT_FIELD) != null) {
+			TableEntity entity = new TableEntity((String) event.get(Constants.PARTITION_KEY_TABLESTORAGE_EVENT_FIELD), (String) event.get(Constants.ROW_KEY_TABLESTORAGE_EVENT_FIELD));
 			entity.setProperties(event);
 			if (!partitionEvents.containsKey(entity.getPartitionKey())){
 				partitionEvents.put(entity.getPartitionKey(), new ArrayList<>());
@@ -134,29 +152,28 @@ public class NodoVerifyKOEventToTableStorage {
 		}
 	}
 
-	private byte[] getPayload(Logger logger, Map<String,Object> event) {
-		ByteArrayOutputStream byteArrayStream = new ByteArrayOutputStream();
-		String payload = (String) event.get(Constants.PAYLOAD_TABLESTORAGE_EVENT_FIELD);
-		byte[] data = null;
-		if (payload != null) {
-			try {
-				data = payload.getBytes(StandardCharsets.UTF_8);
-				DeflaterOutputStream deflaterOutputStream = new DeflaterOutputStream(byteArrayStream, new Deflater());
-				deflaterOutputStream.write(data);
-				deflaterOutputStream.close();
-			} catch (Exception e) {
-				logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] AppException - Error while generating payload for event: " + e.getMessage());
-			}
+	private String storeBodyInBlobAndGetReference(String eventBody, String fileName) throws BlobStorageUploadException {
+		String blobBodyReference = null;
+		BlobClient blobClient = getBlobContainerClient().getBlobClient(fileName);
+		try {
+			BinaryData body = BinaryData.fromStream(new ByteArrayInputStream(eventBody.getBytes(StandardCharsets.UTF_8)));
+			blobClient.upload(body);
+			blobBodyReference = BlobBodyReference.builder()
+					.storageAccount(blobContainerClient.getAccountName())
+					.containerName(Constants.BLOB_NAME)
+					.fileName(fileName)
+					.fileLength(body.getLength())
+					.build().toString();
+		} catch (Exception e) {
+			throw new BlobStorageUploadException(e);
 		}
-		return data != null ? byteArrayStream.toByteArray() : null;
+		return blobBodyReference;
 	}
 
-	private String generateRowKey(Map<String, Object> event, String insertedDateValue) {
-		return insertedDateValue.replace(":", "").replace(".", "").replace("T", "").replace("-", "") +
+	private String generateRowKey(Map<String, Object> event, String insertedTimestampValue) {
+		return insertedTimestampValue +
 				"-" +
-				getEventField(event, Constants.CREDITOR_ID_EVENT_FIELD, String.class, Constants.NA) +
-				"-" +
-				getEventField(event, Constants.PSP_ID_EVENT_FIELD, String.class, Constants.NA);
+				getEventField(event, Constants.ID_EVENT_FIELD, String.class, Constants.NA);
 	}
 
 	private void persistEventBatch(Logger logger, Map<String, List<TableTransactionAction>> partitionedEvents) {
