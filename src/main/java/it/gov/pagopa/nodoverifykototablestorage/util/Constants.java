@@ -14,8 +14,6 @@ public class Constants {
 
     public static final String ID_EVENT_FIELD = "id";
     public static final String FAULTBEAN_TIMESTAMP_EVENT_FIELD = "faultBean.timestamp";
-     public static final String CREDITOR_ID_EVENT_FIELD = "creditor.idPA";
-    public static final String PSP_ID_EVENT_FIELD = "psp.idPsp";
     public static final String NOTICE_NUMBER_EVENT_FIELD = "debtorPosition.noticeNumber";
     public static final String ID_PA_EVENT_FIELD = "creditor.idPA";
     public static final String ID_PSP_EVENT_FIELD = "psp.idPsp";

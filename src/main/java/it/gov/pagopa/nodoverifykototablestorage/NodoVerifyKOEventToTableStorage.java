@@ -64,7 +64,7 @@ public class NodoVerifyKOEventToTableStorage {
 					// update event with the required parameters and other needed fields
 					properties[index].forEach((property, value) -> eventToBeStored.put(replaceDashWithUppercase(property), value));
 
-					Long insertedTimestampValue = getEventField(event, Constants.FAULTBEAN_TIMESTAMP_EVENT_FIELD, Integer.class, 0).longValue();
+					Long insertedTimestampValue = getEventField(event, Constants.FAULTBEAN_TIMESTAMP_EVENT_FIELD, Long.class, 0L);
 					String insertedDateValue = insertedTimestampValue == 0L ? Constants.NA : new SimpleDateFormat("yyyy-MM-dd").format(new Date(insertedTimestampValue));
 
 					// inserting the identification columns on event saved in Table Storage
