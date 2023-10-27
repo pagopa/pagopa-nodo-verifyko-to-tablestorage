@@ -32,7 +32,7 @@
       "default": "Information",
       "Host.Results": "Error",
       "Function": "Information",
-      "Function.EventHubNodoVerifyKOEventToTSProcessor": "Error",
+      "Function.EventHubNodoVerifyKOEventToTSProcessor": "Trace",
       "Host.Aggregator": "Trace"
     }
   }
