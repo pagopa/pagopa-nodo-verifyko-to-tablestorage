@@ -18,6 +18,8 @@ The function aims to dump verify KO event sent via Azure Event Hub to a CosmosDB
 
 ## Run locally with Maven
 
+`docker run -p 10000:10000 -p 10001:10001 -p 10002:10002 mcr.microsoft.com/azure-storage/azurite`
+
 `mvn clean package`
 
 `mvn azure-functions:run`
