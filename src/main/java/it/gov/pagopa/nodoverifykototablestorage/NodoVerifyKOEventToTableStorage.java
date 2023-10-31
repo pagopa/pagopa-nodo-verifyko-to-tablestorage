@@ -64,7 +64,7 @@ public class NodoVerifyKOEventToTableStorage {
 					// update event with the required parameters and other needed fields
 					properties[index].forEach((property, value) -> eventToBeStored.put(replaceDashWithUppercase(property), value));
 
-					Long insertedTimestampValue = getEventField(event, Constants.FAULTBEAN_TIMESTAMP_EVENT_FIELD, Long.class, 0L);
+					long insertedTimestampValue = getEventField(event, Constants.FAULTBEAN_TIMESTAMP_EVENT_FIELD, Number.class, 0L).longValue();
 					String insertedDateValue = insertedTimestampValue == 0L ? Constants.NA : new SimpleDateFormat("yyyy-MM-dd").format(new Date(insertedTimestampValue));
 
 					// inserting the identification columns on event saved in Table Storage
@@ -89,8 +89,8 @@ public class NodoVerifyKOEventToTableStorage {
 			}
 		} catch (BlobStorageUploadException e) {
 			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] Persistence Exception - Could not save event body on Azure Blob Storage, error: " + e);
-		} catch (NullPointerException e) {
-			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] AppException - NullPointerException exception on table storage nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e.getMessage());
+		} catch (IllegalArgumentException e) {
+			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToDS] AppException - Illegal argument exception on table storage nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e);
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] AppException - Generic exception on table storage nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e.getMessage());
 		}
@@ -107,6 +107,9 @@ public class NodoVerifyKOEventToTableStorage {
 				field = clazz.cast(retrievedEventField);
 			} else {
 				eventSubset = (Map) retrievedEventField;
+				if (eventSubset == null) {
+					throw new IllegalArgumentException("The field [" + name + "] does not exists in the passed event.");
+				}
 			}
 		}
 		return field == null ? defaultValue : field;
