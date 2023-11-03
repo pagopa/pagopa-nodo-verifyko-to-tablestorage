@@ -86,6 +86,8 @@ public class NodoVerifyKOEventToTableStorage {
 
 				// save all events in the retrieved batch in the storage
 				persistEventBatch(logger, partitionedEvents);
+			} else {
+				logger.log(Level.SEVERE, () -> String.format("[ALERT][VerifyKOToTS] AppException - Error processing events, lengths do not match: [events: %d - properties: %d]", events.size(), properties.length));
 			}
 		} catch (BlobStorageUploadException e) {
 			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] Persistence Exception - Could not save event body on Azure Blob Storage, error: " + e);
@@ -128,7 +130,7 @@ public class NodoVerifyKOEventToTableStorage {
 		return builder.toString();
 	}
 
-	private static TableServiceClient getTableServiceClient(){
+	public static TableServiceClient getTableServiceClient(){
 		if (tableServiceClient == null) {
 			tableServiceClient = new TableServiceClientBuilder().connectionString(System.getenv("TABLE_STORAGE_CONN_STRING")).buildClient();
 			tableServiceClient.createTableIfNotExists(Constants.TABLE_NAME);
@@ -136,7 +138,7 @@ public class NodoVerifyKOEventToTableStorage {
 		return tableServiceClient;
 	}
 
-	private static BlobContainerClient getBlobContainerClient(){
+	public static BlobContainerClient getBlobContainerClient(){
 		if (blobContainerClient == null) {
 			BlobServiceClient blobServiceClient = new BlobServiceClientBuilder().connectionString(System.getenv("BLOB_STORAGE_CONN_STRING")).buildClient();
 			blobContainerClient = blobServiceClient.createBlobContainerIfNotExists(Constants.BLOB_NAME);
@@ -157,15 +159,15 @@ public class NodoVerifyKOEventToTableStorage {
 
 	private String storeBodyInBlobAndGetReference(String eventBody, String fileName) throws BlobStorageUploadException {
 		String blobBodyReference = null;
-		BlobClient blobClient = getBlobContainerClient().getBlobClient(fileName);
 		try {
+			BlobClient blobClient = getBlobContainerClient().getBlobClient(fileName);
 			BinaryData body = BinaryData.fromStream(new ByteArrayInputStream(eventBody.getBytes(StandardCharsets.UTF_8)));
 			blobClient.upload(body);
 			blobBodyReference = BlobBodyReference.builder()
-					.storageAccount(blobContainerClient.getAccountName())
+					.storageAccount(getBlobContainerClient().getAccountName())
 					.containerName(Constants.BLOB_NAME)
 					.fileName(fileName)
-					.fileLength(body.getLength())
+					.fileLength(body.toString().length())
 					.build().toString();
 		} catch (Exception e) {
 			throw new BlobStorageUploadException(e);
