@@ -20,7 +20,6 @@ import it.gov.pagopa.nodoverifykototablestorage.util.ObjectMapperUtils;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
-import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -66,7 +65,7 @@ public class NodoVerifyKOEventToTableStorage {
 					// update event with the required parameters and other needed fields
 					properties[index].forEach((property, value) -> eventToBeStored.put(replaceDashWithUppercase(property), value));
 
-					Map faultBeanMap = (Map) event.getOrDefault(Constants.FAULTBEAN_EVENT_FIELD, new HashMap<>());
+					Map<String, Object> faultBeanMap = (Map) event.getOrDefault(Constants.FAULTBEAN_EVENT_FIELD, new HashMap<>());
 					String faultBeanTimestamp = (String) faultBeanMap.getOrDefault(Constants.TIMESTAMP_EVENT_FIELD, "ERROR");
 
 					// sometimes faultBeanTimestamp has less than 6 digits regarding microseconds
