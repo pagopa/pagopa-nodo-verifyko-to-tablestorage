@@ -121,7 +121,8 @@ public class NodoVerifyKOEventToTableStorage {
 		int dotIndex = faultBeanTimestamp.indexOf('.');
 		if (dotIndex != -1) {
 			int fractionLength = faultBeanTimestamp.length() - dotIndex - 1;
-			faultBeanTimestamp = fractionLength < 6 ? String.format("%s%0" + (6 - fractionLength) + "d", faultBeanTimestamp, 0) : faultBeanTimestamp;
+			faultBeanTimestamp = fractionLength < 6 ? String.format("%s%s", faultBeanTimestamp, "0".repeat(6 - fractionLength)) : faultBeanTimestamp;
+
 		}
 		return faultBeanTimestamp;
 	}
