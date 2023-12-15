@@ -22,6 +22,8 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -64,16 +66,36 @@ public class NodoVerifyKOEventToTableStorage {
 					// update event with the required parameters and other needed fields
 					properties[index].forEach((property, value) -> eventToBeStored.put(replaceDashWithUppercase(property), value));
 
-					long insertedTimestampValue = getEventField(event, Constants.FAULTBEAN_TIMESTAMP_EVENT_FIELD, Number.class, 0L).longValue();
-					String insertedDateValue = insertedTimestampValue == 0L ? Constants.NA : new SimpleDateFormat("yyyy-MM-dd").format(new Date(insertedTimestampValue));
+					Map faultBeanMap = (Map) event.getOrDefault(Constants.FAULTBEAN_EVENT_FIELD, new HashMap<>());
+					String faultBeanTimestamp = (String) faultBeanMap.getOrDefault(Constants.TIMESTAMP_EVENT_FIELD, "ERROR");
+
+					// sometimes faultBeanTimestamp has less than 6 digits regarding microseconds
+					int dotIndex = faultBeanTimestamp.indexOf('.');
+					if (dotIndex != -1) {
+						int fractionLength = faultBeanTimestamp.length() - dotIndex - 1;
+						faultBeanTimestamp = fractionLength < 6 ? String.format("%s%0" + (6 - fractionLength) + "d", faultBeanTimestamp, 0) : faultBeanTimestamp;
+					}
+
+					if (faultBeanTimestamp.equals("ERROR")) {
+						throw new IllegalStateException("Missing " + Constants.FAULTBEAN_EVENT_FIELD + " or " + Constants.FAULTBEAN_TIMESTAMP_EVENT_FIELD);
+					}
+
+					DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSSSS");
+					LocalDateTime dateTime = LocalDateTime.parse(faultBeanTimestamp, formatter);
+					long timestamp = dateTime.toEpochSecond(ZoneOffset.UTC);
+					faultBeanMap.put(Constants.TIMESTAMP_EVENT_FIELD, timestamp);
+					faultBeanMap.put(Constants.DATE_TIME_EVENT_FIELD, faultBeanTimestamp);
+
+					String insertedDateValue = dateTime.getYear() + "-" + dateTime.getMonthValue() + "-" + dateTime.getDayOfMonth();
 
 					// inserting the identification columns on event saved in Table Storage
-					String rowKey = generateRowKey(event, String.valueOf(insertedTimestampValue));
+					String rowKey = generateRowKey(event, String.valueOf(timestamp));
 					eventToBeStored.put(Constants.PARTITION_KEY_TABLESTORAGE_EVENT_FIELD, insertedDateValue);
 					eventToBeStored.put(Constants.ROW_KEY_TABLESTORAGE_EVENT_FIELD, rowKey);
 
 					// inserting the additional columns on event saved in Table Storage
-					eventToBeStored.put(Constants.TIMESTAMP_TABLESTORAGE_EVENT_FIELD, insertedTimestampValue);
+					eventToBeStored.put(Constants.TIMESTAMP_TABLESTORAGE_EVENT_FIELD, timestamp);
+					eventToBeStored.put(Constants.DATE_TIME_EVENT_FIELD, dateTime);
 					eventToBeStored.put(Constants.NOTICE_NUMBER_TABLESTORAGE_EVENT_FIELD, getEventField(event, Constants.NOTICE_NUMBER_EVENT_FIELD, String.class, Constants.NA));
 					eventToBeStored.put(Constants.ID_PA_TABLESTORAGE_EVENT_FIELD, getEventField(event, Constants.ID_PA_EVENT_FIELD, String.class, Constants.NA));
 					eventToBeStored.put(Constants.ID_PSP_TABLESTORAGE_EVENT_FIELD, getEventField(event, Constants.ID_PSP_EVENT_FIELD, String.class, Constants.NA));
@@ -93,6 +115,8 @@ public class NodoVerifyKOEventToTableStorage {
 			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] Persistence Exception - Could not save event body on Azure Blob Storage, error: " + e);
 		} catch (IllegalArgumentException e) {
 			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToDS] AppException - Illegal argument exception on table storage nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e);
+		} catch (IllegalStateException e) {
+			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToDS] AppException - Missing argument exception on nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e);
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] AppException - Generic exception on table storage nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e.getMessage());
 		}

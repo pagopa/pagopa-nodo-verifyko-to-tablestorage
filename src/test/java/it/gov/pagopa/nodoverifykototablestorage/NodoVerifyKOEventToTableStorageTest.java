@@ -9,7 +9,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 import com.azure.core.util.BinaryData;
 import com.azure.data.tables.TableClient;
@@ -83,13 +85,14 @@ class NodoVerifyKOEventToTableStorageTest {
             properties[1].put("prop2-with-dash", "2");
 
             // generating expected output on event 1
-            String partitionKey1 = "2023-01-01";
-            String rowKey1 = "1672570800000-uuid-001";
+            String partitionKey1 = "2023-12-12";
+            String rowKey1 = "1702406079-uuid-001";
             int size1 = BinaryData.fromStream(new ByteArrayInputStream(eventInStringForm1.getBytes(StandardCharsets.UTF_8))).toString().length();
             Map<String, Object> expectedEvent1 = new HashMap<>();
             expectedEvent1.put("PartitionKey", partitionKey1);
             expectedEvent1.put("RowKey", rowKey1);
-            expectedEvent1.put("timestamp", 1672570800000L);
+            expectedEvent1.put("timestamp", 1702406079L);
+            expectedEvent1.put("dateTime", "2023-12-12T18:34:39.860654");
             expectedEvent1.put("noticeNumber", "302040000090000000");
             expectedEvent1.put("idPA", "77777777777");
             expectedEvent1.put("idPsp", "88888888888");
@@ -100,13 +103,14 @@ class NodoVerifyKOEventToTableStorageTest {
             expectedEvent1.put("blobBodyRef", "{\"storageAccount\":\"" + storageAccount + "\",\"containerName\":\"null\",\"fileName\":\"" + rowKey1 + "\",\"fileLength\":" + size1 + "}");
 
             // generating expected output on event 2
-            String partitionKey2 = "2023-01-02";
-            String rowKey2 = "1672657200000-uuid-002";
+            String partitionKey2 = "2023-12-13";
+            String rowKey2 = "1702483842-uuid-002";
             int size2 = BinaryData.fromStream(new ByteArrayInputStream(eventInStringForm2.getBytes(StandardCharsets.UTF_8))).toString().length();
             Map<String, Object> expectedEvent2 = new HashMap<>();
             expectedEvent2.put("PartitionKey", partitionKey2);
             expectedEvent2.put("RowKey", rowKey2);
-            expectedEvent2.put("timestamp", 1672657200000L);
+            expectedEvent2.put("timestamp", 1702483842L);
+            expectedEvent2.put("dateTime", "2023-12-13T16:10:42.906415");
             expectedEvent2.put("noticeNumber", "302040000090000001");
             expectedEvent2.put("idPA", "77777777777");
             expectedEvent2.put("idPsp", "88888888888");
@@ -141,10 +145,10 @@ class NodoVerifyKOEventToTableStorageTest {
             assertEquals(expectedEventsToPersist.size(), transactions.size());
             assertEquals(partitionKey1, transactions.get(0).get(0).getEntity().getPartitionKey());
             assertEquals(rowKey1, transactions.get(0).get(0).getEntity().getRowKey());
-            assertEquals(expectedEvent1, transactions.get(0).get(0).getEntity().getProperties());
+            assertEquals(convertWithStream(expectedEvent1), convertWithStream(transactions.get(0).get(0).getEntity().getProperties()));
             assertEquals(partitionKey2, transactions.get(1).get(0).getEntity().getPartitionKey());
             assertEquals(rowKey2, transactions.get(1).get(0).getEntity().getRowKey());
-            assertEquals(expectedEvent2, transactions.get(1).get(0).getEntity().getProperties());
+            assertEquals(convertWithStream(expectedEvent2), convertWithStream(transactions.get(1).get(0).getEntity().getProperties()));
         }
     }
 
@@ -204,7 +208,7 @@ class NodoVerifyKOEventToTableStorageTest {
         function.processNodoVerifyKOEvent(events, properties, context);
 
         // test assertion
-        assertTrue(logHandler.getLogs().contains("java.lang.IllegalArgumentException: The field [faultBean.timestamp] does not exists in the passed event."));
+        assertTrue(logHandler.getLogs().contains("java.lang.IllegalStateException"));
     }
 
     @Test
@@ -228,5 +232,11 @@ class NodoVerifyKOEventToTableStorageTest {
 
         // test assertion
         assertTrue(logHandler.getLogs().contains("[ALERT][VerifyKOToTS] AppException - Generic exception on table storage nodo-verify-ko-events msg ingestion"));
+    }
+
+    public String convertWithStream(Map<String, Object> mapToConvert) {
+        return new TreeMap<>(mapToConvert).entrySet().stream()
+                .map(entry -> entry.getKey() + "=" + entry.getValue())
+                .collect(Collectors.joining(", ", "{", "}"));
     }
 }
