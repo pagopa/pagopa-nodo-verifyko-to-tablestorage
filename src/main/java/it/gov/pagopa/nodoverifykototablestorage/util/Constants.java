@@ -13,6 +13,12 @@ public class Constants {
 
 
     public static final String ID_EVENT_FIELD = "id";
+
+    public static final String FAULTBEAN_EVENT_FIELD = "faultBean";
+
+    public static final String TIMESTAMP_EVENT_FIELD = "timestamp";
+
+    public static final String DATE_TIME_EVENT_FIELD = "dateTime";
     public static final String FAULTBEAN_TIMESTAMP_EVENT_FIELD = "faultBean.timestamp";
     public static final String NOTICE_NUMBER_EVENT_FIELD = "debtorPosition.noticeNumber";
     public static final String ID_PA_EVENT_FIELD = "creditor.idPA";
