@@ -51,7 +51,7 @@ public class NodoVerifyKOEventToTableStorage {
 
 		Logger logger = context.getLogger();
 		logger.log(Level.INFO, () -> String.format("Persisting [%d] events...", events.size()));
-
+		String rowKey = "";
 		try {
 			if (events.size() == properties.length) {
 				Map<String, List<TableTransactionAction>> partitionedEvents = new HashMap<>();
@@ -84,7 +84,7 @@ public class NodoVerifyKOEventToTableStorage {
 					String insertedDateValue = dateTime.getYear() + "-" + dateTime.getMonthValue() + "-" + dateTime.getDayOfMonth();
 
 					// inserting the identification columns on event saved in Table Storage
-					String rowKey = generateRowKey(event, String.valueOf(timestamp));
+					rowKey = generateRowKey(event, String.valueOf(timestamp));
 					eventToBeStored.put(Constants.PARTITION_KEY_TABLESTORAGE_EVENT_FIELD, insertedDateValue);
 					eventToBeStored.put(Constants.ROW_KEY_TABLESTORAGE_EVENT_FIELD, rowKey);
 
@@ -107,7 +107,8 @@ public class NodoVerifyKOEventToTableStorage {
 				logger.log(Level.SEVERE, () -> String.format("[ALERT][VerifyKOToTS] AppException - Error processing events, lengths do not match: [events: %d - properties: %d]", events.size(), properties.length));
 			}
 		} catch (BlobStorageUploadException e) {
-			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] Persistence Exception - Could not save event body on Azure Blob Storage, error: " + e);
+			String finalRowKey = rowKey;
+			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] Persistence Exception - Could not save event body of " + finalRowKey + " on Azure Blob Storage, error: " + e);
 		} catch (IllegalArgumentException e) {
 			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToDS] AppException - Illegal argument exception on table storage nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e);
 		} catch (IllegalStateException e) {
@@ -191,7 +192,7 @@ public class NodoVerifyKOEventToTableStorage {
 		try {
 			BlobClient blobClient = getBlobContainerClient().getBlobClient(fileName);
 			BinaryData body = BinaryData.fromStream(new ByteArrayInputStream(eventBody.getBytes(StandardCharsets.UTF_8)));
-			blobClient.upload(body);
+			blobClient.upload(body, true);
 			blobBodyReference = BlobBodyReference.builder()
 					.storageAccount(getBlobContainerClient().getAccountName())
 					.containerName(Constants.BLOB_NAME)
