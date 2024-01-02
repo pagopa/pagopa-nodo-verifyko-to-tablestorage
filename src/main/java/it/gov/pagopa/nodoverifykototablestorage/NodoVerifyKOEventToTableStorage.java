@@ -96,7 +96,7 @@ public class NodoVerifyKOEventToTableStorage {
 					eventToBeStored.put(Constants.ID_PSP_TABLESTORAGE_EVENT_FIELD, getEventField(event, Constants.ID_PSP_EVENT_FIELD, String.class, Constants.NA));
 					eventToBeStored.put(Constants.ID_STATION_TABLESTORAGE_EVENT_FIELD, getEventField(event, Constants.ID_STATION_EVENT_FIELD, String.class, Constants.NA));
 					eventToBeStored.put(Constants.ID_CHANNEL_TABLESTORAGE_EVENT_FIELD, getEventField(event, Constants.ID_CHANNEL_EVENT_FIELD, String.class, Constants.NA));
-					eventToBeStored.put(Constants.BLOB_BODY_REFERENCE_TABLESTORAGE_EVENT_FIELD, storeBodyInBlobAndGetReference(logger, eventInStringForm, rowKey));
+					eventToBeStored.put(Constants.BLOB_BODY_REFERENCE_TABLESTORAGE_EVENT_FIELD, storeBodyInBlobAndGetReference(eventInStringForm, rowKey));
 
 					addToBatch(partitionedEvents, eventToBeStored);
 				}
@@ -187,12 +187,12 @@ public class NodoVerifyKOEventToTableStorage {
 		}
 	}
 
-	private String storeBodyInBlobAndGetReference(Logger logger, String eventBody, String fileName) throws BlobStorageUploadException {
+	private String storeBodyInBlobAndGetReference(String eventBody, String fileName) throws BlobStorageUploadException {
 		String blobBodyReference = null;
 		try {
 			BlobClient blobClient = getBlobContainerClient().getBlobClient(fileName);
 			BinaryData body = BinaryData.fromStream(new ByteArrayInputStream(eventBody.getBytes(StandardCharsets.UTF_8)));
-			blobClient.upload(body);
+			blobClient.upload(body, true);
 			blobBodyReference = BlobBodyReference.builder()
 					.storageAccount(getBlobContainerClient().getAccountName())
 					.containerName(Constants.BLOB_NAME)
@@ -200,7 +200,6 @@ public class NodoVerifyKOEventToTableStorage {
 					.fileLength(body.toString().length())
 					.build().toString();
 		} catch (Exception e) {
-			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS][BLOB] Exception - Problem to save filename: " + fileName + " -- " + e);
 			throw new BlobStorageUploadException(e);
 		}
 		return blobBodyReference;
