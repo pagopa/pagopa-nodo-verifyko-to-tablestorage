@@ -71,7 +71,7 @@ public class NodoVerifyKOEventToTableStorage {
 					// sometimes faultBeanTimestamp has less than 6 digits regarding microseconds
 					faultBeanTimestamp = fixDateTime(faultBeanTimestamp);
 
-					if (faultBeanTimestamp.equals("ERROR")) {
+					if (faultBeanTimestamp.contains("ERROR")) {
 						throw new IllegalStateException("Missing " + Constants.FAULTBEAN_EVENT_FIELD + " or " + Constants.FAULTBEAN_TIMESTAMP_EVENT_FIELD);
 					}
 
@@ -123,8 +123,11 @@ public class NodoVerifyKOEventToTableStorage {
 		if (dotIndex != -1) {
 			int fractionLength = faultBeanTimestamp.length() - dotIndex - 1;
 			faultBeanTimestamp = fractionLength < 6 ? String.format("%s%s", faultBeanTimestamp, "0".repeat(6 - fractionLength)) : faultBeanTimestamp;
-
 		}
+		else {
+			faultBeanTimestamp = String.format("%s.000000", faultBeanTimestamp);
+		}
+
 		return faultBeanTimestamp;
 	}
 
