@@ -102,7 +102,7 @@ public class NodoVerifyKOEventToTableStorage {
 				}
 
 				// save all events in the retrieved batch in the storage
-				persistEventBatch(logger, partitionedEvents);
+				persistEventBatch(logger, partitionedEvents, rowKey);
 			} else {
 				logger.log(Level.SEVERE, () -> String.format("[ALERT][VerifyKOToTS] AppException - Error processing events, lengths do not match: [events: %d - properties: %d]", events.size(), properties.length));
 			}
@@ -214,13 +214,13 @@ public class NodoVerifyKOEventToTableStorage {
 				getEventField(event, Constants.ID_EVENT_FIELD, String.class, Constants.NA);
 	}
 
-	private void persistEventBatch(Logger logger, Map<String, List<TableTransactionAction>> partitionedEvents) {
+	private void persistEventBatch(Logger logger, Map<String, List<TableTransactionAction>> partitionedEvents, String rowKey) {
 		TableClient tableClient = getTableServiceClient().getTableClient(Constants.TABLE_NAME);
 		partitionedEvents.forEach((partition, values) -> {
 			try {
 				tableClient.submitTransaction(values);
 			} catch (Exception e) {
-				logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] Persistence Exception - Could not save " + values.size() + " events (partition [" + partition + "]) on Azure Table Storage, error: " + e);
+				logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] Persistence Exception - Could not save " + values.size() + " events (partition [" + partition + "], rowKey [" + rowKey + "]) on Azure Table Storage, error: " + e);
 			}
 		});
 		logger.info("Done processing events");
