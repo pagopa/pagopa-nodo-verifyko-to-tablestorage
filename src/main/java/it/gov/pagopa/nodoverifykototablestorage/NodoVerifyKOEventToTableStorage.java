@@ -24,6 +24,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -102,7 +103,7 @@ public class NodoVerifyKOEventToTableStorage {
 				}
 
 				// save all events in the retrieved batch in the storage
-				persistEventBatch(logger, partitionedEvents, rowKey);
+				persistEventBatch(logger, partitionedEvents);
 			} else {
 				logger.log(Level.SEVERE, () -> String.format("[ALERT][VerifyKOToTS] AppException - Error processing events, lengths do not match: [events: %d - properties: %d]", events.size(), properties.length));
 			}
@@ -214,13 +215,18 @@ public class NodoVerifyKOEventToTableStorage {
 				getEventField(event, Constants.ID_EVENT_FIELD, String.class, Constants.NA);
 	}
 
-	private void persistEventBatch(Logger logger, Map<String, List<TableTransactionAction>> partitionedEvents, String rowKey) {
+	private void persistEventBatch(Logger logger, Map<String, List<TableTransactionAction>> partitionedEvents) {
 		TableClient tableClient = getTableServiceClient().getTableClient(Constants.TABLE_NAME);
+		AtomicReference<StringJoiner> stringJoiner = new AtomicReference<>(new StringJoiner(","));
+		AtomicReference<String> finalCommaSeparatedString = new AtomicReference<>("");
 		partitionedEvents.forEach((partition, values) -> {
 			try {
+				values.forEach(v -> stringJoiner.get().add(v.getEntity().getRowKey()));
+				finalCommaSeparatedString.set(stringJoiner.toString());
 				tableClient.submitTransaction(values);
+				stringJoiner.set(new StringJoiner(","));
 			} catch (Exception e) {
-				logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] Persistence Exception - Could not save " + values.size() + " events (partition [" + partition + "], rowKey [" + rowKey + "]) on Azure Table Storage, error: " + e);
+				logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] Persistence Exception - Could not save " + values.size() + " events (partition [" + partition + "], rowKeys range [" + finalCommaSeparatedString + "]) on Azure Table Storage, error: " + e);
 			}
 		});
 		logger.info("Done processing events");
