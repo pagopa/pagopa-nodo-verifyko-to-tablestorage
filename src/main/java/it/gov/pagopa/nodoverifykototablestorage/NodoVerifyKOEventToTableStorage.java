@@ -226,7 +226,7 @@ public class NodoVerifyKOEventToTableStorage {
 				tableClient.submitTransaction(values);
 				stringJoiner.set(new StringJoiner(","));
 			} catch (Exception e) {
-				logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] Persistence Exception - Could not save " + values.size() + " events (partition [" + partition + "], rowKeys range [" + finalCommaSeparatedString + "]) on Azure Table Storage, error: " + e);
+				logger.log(Level.SEVERE, e, () -> "[ALERT][VerifyKOToTS] Persistence Exception - Could not save " + values.size() + " events (partition [" + partition + "], rowKeys range [" + finalCommaSeparatedString + "]) on Azure Table Storage, error: " + e.getMessage());
 			}
 		});
 		logger.info("Done processing events");
