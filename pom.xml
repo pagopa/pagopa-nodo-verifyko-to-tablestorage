@@ -5,7 +5,7 @@
 
     <groupId>it.gov.pagopa</groupId>
     <artifactId>nodoverifykototablestorage</artifactId>
-    <version>0.1.5-1-NOD-652-recuperare-eventi-persi-nel-tablestorage</version>
+    <version>0.1.5-2-NOD-652-recuperare-eventi-persi-nel-tablestorage</version>
     <packaging>jar</packaging>
 
     <name>Nodo Verify KO to datastore Fn</name>
