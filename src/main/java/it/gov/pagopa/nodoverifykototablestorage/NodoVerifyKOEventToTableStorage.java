@@ -123,10 +123,10 @@ public class NodoVerifyKOEventToTableStorage {
 			errorCause = "[ALERT][VerifyKOToTS] Persistence Exception - Could not save event body of " + rowKey + " on Azure Blob Storage, error: " + e;
 		} catch (IllegalArgumentException e) {
 			isPersistenceOk = false;
-			errorCause = "[ALERT][VerifyKOToDS] AppException - Illegal argument exception on table storage nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e;
+			errorCause = "[ALERT][VerifyKOToTS] AppException - Illegal argument exception on table storage nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e;
 		} catch (IllegalStateException e) {
 			isPersistenceOk = false;
-			errorCause = "[ALERT][VerifyKOToDS] AppException - Missing argument exception on nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e;
+			errorCause = "[ALERT][VerifyKOToTS] AppException - Missing argument exception on nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e;
 		} catch (Exception e) {
 			isPersistenceOk = false;
 			errorCause =  "[ALERT][VerifyKOToTS] AppException - Generic exception on table storage nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e.getMessage();
