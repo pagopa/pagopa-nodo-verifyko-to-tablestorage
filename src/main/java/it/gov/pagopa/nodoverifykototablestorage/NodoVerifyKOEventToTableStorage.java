@@ -43,7 +43,7 @@ public class NodoVerifyKOEventToTableStorage {
 	private static BlobContainerClient blobContainerClient = null;
 
 	@FunctionName("EventHubNodoVerifyKOEventToTSProcessor")
-	@ExponentialBackoffRetry(maxRetryCount = 5, maximumInterval = "00:15:00", minimumInterval = "00:00:10")
+	@ExponentialBackoffRetry(maxRetryCount = 5, maximumInterval = "00:15:00", minimumInterval = "00:00:30")
     public void processNodoVerifyKOEvent (
 			@EventHubTrigger(
 					name = "NodoVerifyKOEvent",
