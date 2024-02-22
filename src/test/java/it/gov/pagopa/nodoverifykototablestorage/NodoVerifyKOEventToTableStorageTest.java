@@ -23,6 +23,7 @@ import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.microsoft.azure.functions.ExecutionContext;
+import it.gov.pagopa.nodoverifykototablestorage.exception.AppException;
 import it.gov.pagopa.nodoverifykototablestorage.util.LogHandler;
 import it.gov.pagopa.nodoverifykototablestorage.util.TestUtil;
 import lombok.SneakyThrows;
@@ -128,7 +129,7 @@ class NodoVerifyKOEventToTableStorageTest {
             function.processNodoVerifyKOEvent(events, properties, context);
 
             // test assertion for data persistence execution
-            verify(blobClient, times(2)).upload(blobCaptor.capture());
+            verify(blobClient, times(2)).upload(blobCaptor.capture(), anyBoolean());
             verify(tableClient, times(2)).submitTransaction(transactionCaptor.capture());
 
             // test assertion for blob storing
@@ -177,7 +178,7 @@ class NodoVerifyKOEventToTableStorageTest {
 
         // execute logic
         NodoVerifyKOEventToTableStorage function = new NodoVerifyKOEventToTableStorage();
-        function.processNodoVerifyKOEvent(events, properties, context);
+        assertThrows(AppException.class, () -> function.processNodoVerifyKOEvent(events, properties, context));
 
         // test assertion
         assertTrue(logHandler.getLogs().contains("Error processing events, lengths do not match: [events: 1 - properties: 2]"));
@@ -205,7 +206,7 @@ class NodoVerifyKOEventToTableStorageTest {
 
         // execute logic
         NodoVerifyKOEventToTableStorage function = new NodoVerifyKOEventToTableStorage();
-        function.processNodoVerifyKOEvent(events, properties, context);
+        assertThrows(AppException.class, () -> function.processNodoVerifyKOEvent(events, properties, context));
 
         // test assertion
         assertTrue(logHandler.getLogs().contains("java.lang.IllegalStateException"));
@@ -228,7 +229,7 @@ class NodoVerifyKOEventToTableStorageTest {
 
         // execute logic
         NodoVerifyKOEventToTableStorage function = spy(NodoVerifyKOEventToTableStorage.class);
-        function.processNodoVerifyKOEvent(events, null, context);
+        assertThrows(AppException.class, () -> function.processNodoVerifyKOEvent(events, null, context));
 
         // test assertion
         assertTrue(logHandler.getLogs().contains("[ALERT][VerifyKOToTS] AppException - Generic exception on table storage nodo-verify-ko-events msg ingestion"));
