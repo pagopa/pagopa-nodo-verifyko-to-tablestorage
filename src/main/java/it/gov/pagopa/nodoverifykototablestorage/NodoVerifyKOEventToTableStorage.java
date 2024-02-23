@@ -38,12 +38,14 @@ import java.util.stream.Collectors;
  */
 public class NodoVerifyKOEventToTableStorage {
 
+	private static final Integer MAX_RETRY_COUNT = 7;
+
 	private static TableServiceClient tableServiceClient = null;
 
 	private static BlobContainerClient blobContainerClient = null;
 
 	@FunctionName("EventHubNodoVerifyKOEventToTSProcessor")
-	@ExponentialBackoffRetry(maxRetryCount = 5, maximumInterval = "00:15:00", minimumInterval = "00:00:30")
+	@ExponentialBackoffRetry(maxRetryCount = 7, maximumInterval = "24:00:00", minimumInterval = "00:10:00") // retry after 10m, 20m, 40m, 1h20m, 2h40m, 5h20m, 10h40m, for a total of 21h more or less from start retrying to end
     public void processNodoVerifyKOEvent (
 			@EventHubTrigger(
 					name = "NodoVerifyKOEvent",
@@ -55,11 +57,16 @@ public class NodoVerifyKOEventToTableStorage {
 			final ExecutionContext context) {
 
 		String errorCause = null;
-		boolean isPersistenceOk = true;
+		boolean isPersistenceOk;
+		int retryIndex = context.getRetryContext() == null ? -1 : context.getRetryContext().getRetrycount();
 
 		Logger logger = context.getLogger();
 		logger.log(Level.FINE, () -> String.format("Persisting [%d] events...", events.size()));
 		String rowKey = "";
+
+		if (retryIndex == MAX_RETRY_COUNT) {
+			logger.log(Level.WARNING, () -> String.format("[ALERT][LAST RETRY][VerifyKOToTS] Performing last retry for event ingestion: InvocationId [%s], Events: %s", context.getInvocationId(), events));
+		}
 
 		try {
 			if (events.size() == properties.length) {
@@ -110,7 +117,7 @@ public class NodoVerifyKOEventToTableStorage {
 					addToBatch(partitionedEvents, eventToBeStored);
 				}
 
-				logger.log(Level.INFO, () -> String.format("Performing event ingestion: InvocationId [%s], Retry Attempt [%d], Events: %s", context.getInvocationId(), context.getRetryContext() == null ? -1 : context.getRetryContext().getRetrycount(), extractTraceForEventsToPersist(partitionedEvents)));
+				logger.log(Level.INFO, () -> String.format("Performing event ingestion: InvocationId [%s], Retry Attempt [%d], Events: %s", context.getInvocationId(), retryIndex, extractTraceForEventsToPersist(partitionedEvents)));
 
 				// save all events in the retrieved batch in the storage
 				isPersistenceOk = persistEventBatch(logger, partitionedEvents);
