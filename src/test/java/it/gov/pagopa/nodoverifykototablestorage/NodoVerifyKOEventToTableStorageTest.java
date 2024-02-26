@@ -1,6 +1,7 @@
 package it.gov.pagopa.nodoverifykototablestorage;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.AdditionalMatchers.not;
 import static org.mockito.Mockito.*;
 
 import java.io.ByteArrayInputStream;
@@ -23,9 +24,11 @@ import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.microsoft.azure.functions.ExecutionContext;
+import it.gov.pagopa.nodoverifykototablestorage.exception.AppException;
 import it.gov.pagopa.nodoverifykototablestorage.util.LogHandler;
 import it.gov.pagopa.nodoverifykototablestorage.util.TestUtil;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
@@ -34,16 +37,33 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class NodoVerifyKOEventToTableStorageTest {
 
-    @SuppressWarnings("unchecked")
-    @Test
-    @SneakyThrows
-    void runOk() {
+    private static final String storageAccount = "mockstorageaccount";
 
-        TableServiceClient tableServiceClient = mock(TableServiceClient.class);
-        BlobServiceClient blobServiceClient = mock(BlobServiceClient.class);
-        BlobContainerClient blobContainerClient = mock(BlobContainerClient.class);
-        BlobClient blobClient = mock(BlobClient.class);
-        TableClient tableClient = mock(TableClient.class);
+    private static MockedConstruction<BlobServiceClientBuilder> blobServiceClientBuilder;
+
+    private static TableServiceClient tableServiceClient;
+
+    private static BlobServiceClient blobServiceClient;
+
+    private static BlobContainerClient blobContainerClient;
+
+    private static BlobClient blobClient;
+
+    private static TableClient tableClient;
+
+    private static ExecutionContext context;
+
+    private static ArgumentCaptor<BinaryData> blobCaptor;
+
+    private static ArgumentCaptor<List<TableTransactionAction>> transactionCaptor;
+
+    @BeforeAll
+    static void setup() {
+        tableServiceClient = mock(TableServiceClient.class);
+        blobServiceClient = mock(BlobServiceClient.class);
+        blobContainerClient = mock(BlobContainerClient.class);
+        blobClient = mock(BlobClient.class);
+        tableClient = mock(TableClient.class);
         try (
                 MockedConstruction<BlobServiceClientBuilder> blobServiceClientBuilder = Mockito.mockConstruction(BlobServiceClientBuilder.class, (mock, context) -> {
                     when(mock.connectionString(any())).thenReturn(mock);
@@ -56,20 +76,38 @@ class NodoVerifyKOEventToTableStorageTest {
         ) {
 
             // mocking objects
-            ExecutionContext context = mock(ExecutionContext.class);
+            context = mock(ExecutionContext.class);
             Logger logger = Logger.getLogger("NodoVerifyKOEventToDataStore-test-logger");
             LogHandler logHandler = new LogHandler();
             logger.addHandler(logHandler);
             when(context.getLogger()).thenReturn(logger);
-            String storageAccount = "mockstorageaccount";
             when(blobServiceClient.createBlobContainerIfNotExists(any())).thenReturn(blobContainerClient);
-            when(blobContainerClient.getBlobClient(anyString())).thenReturn(blobClient);
+            when(blobContainerClient.getBlobClient(not(eq("1672531200-fail")))).thenReturn(blobClient);
+            when(blobContainerClient.getBlobClient("1672531200-fail")).thenReturn(null);
             when(tableServiceClient.getTableClient(any())).thenReturn(tableClient);
             when(blobContainerClient.getAccountName()).thenReturn(storageAccount);
             when(tableClient.submitTransaction(anyList())).thenReturn(null);
-            ArgumentCaptor<BinaryData> blobCaptor = ArgumentCaptor.forClass(BinaryData.class);
-            ArgumentCaptor<List<TableTransactionAction>> transactionCaptor = ArgumentCaptor.forClass(List.class);
+            blobCaptor = ArgumentCaptor.forClass(BinaryData.class);
+            transactionCaptor = ArgumentCaptor.forClass(List.class);
+        }
+    }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    @SneakyThrows
+    void runOk() {
+
+
+        try (
+                MockedConstruction<BlobServiceClientBuilder> blobServiceClientBuilder = Mockito.mockConstruction(BlobServiceClientBuilder.class, (mock, context) -> {
+                    when(mock.connectionString(any())).thenReturn(mock);
+                    when(mock.buildClient()).thenReturn(blobServiceClient);
+                });
+                MockedConstruction<TableServiceClientBuilder> tableServiceClientBuilder = Mockito.mockConstruction(TableServiceClientBuilder.class, (mock, context) -> {
+                    when(mock.connectionString(any())).thenReturn(mock);
+                    when(mock.buildClient()).thenReturn(tableServiceClient);
+                });
+        ) {
             // generating input
             String eventInStringForm1 = TestUtil.readStringFromFile("events/event_ok_1.json");
             List<String> events = new ArrayList<>();
@@ -128,7 +166,7 @@ class NodoVerifyKOEventToTableStorageTest {
             function.processNodoVerifyKOEvent(events, properties, context);
 
             // test assertion for data persistence execution
-            verify(blobClient, times(2)).upload(blobCaptor.capture());
+            verify(blobClient, times(2)).upload(blobCaptor.capture(), anyBoolean());
             verify(tableClient, times(2)).submitTransaction(transactionCaptor.capture());
 
             // test assertion for blob storing
@@ -177,7 +215,7 @@ class NodoVerifyKOEventToTableStorageTest {
 
         // execute logic
         NodoVerifyKOEventToTableStorage function = new NodoVerifyKOEventToTableStorage();
-        function.processNodoVerifyKOEvent(events, properties, context);
+        assertThrows(AppException.class, () -> function.processNodoVerifyKOEvent(events, properties, context));
 
         // test assertion
         assertTrue(logHandler.getLogs().contains("Error processing events, lengths do not match: [events: 1 - properties: 2]"));
@@ -205,10 +243,67 @@ class NodoVerifyKOEventToTableStorageTest {
 
         // execute logic
         NodoVerifyKOEventToTableStorage function = new NodoVerifyKOEventToTableStorage();
-        function.processNodoVerifyKOEvent(events, properties, context);
+        assertThrows(AppException.class, () -> function.processNodoVerifyKOEvent(events, properties, context));
 
         // test assertion
         assertTrue(logHandler.getLogs().contains("java.lang.IllegalStateException"));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    @SneakyThrows
+    void runKo_missingRequiredField() {
+        // mocking objects
+        ExecutionContext context = mock(ExecutionContext.class);
+        Logger logger = Logger.getLogger("NodoVerifyKOEventToTableStorage-test-logger");
+        LogHandler logHandler = new LogHandler();
+        logger.addHandler(logHandler);
+        when(context.getLogger()).thenReturn(logger);
+
+        // generating input
+        String eventInStringForm = TestUtil.readStringFromFile("events/event_ko_2.json");
+        List<String> events = new ArrayList<>();
+        events.add(eventInStringForm);
+        Map<String, Object>[] properties = new HashMap[1];
+        properties[0] = new HashMap<>();
+        properties[0].put("prop1_without_dash", true);
+        properties[0].put("prop1-with-dash", "1");
+
+        // execute logic
+        NodoVerifyKOEventToTableStorage function = new NodoVerifyKOEventToTableStorage();
+        assertThrows(AppException.class, () -> function.processNodoVerifyKOEvent(events, properties, context));
+
+        // test assertion
+        assertTrue(logHandler.getLogs().contains("[ALERT][VerifyKOToTS] AppException - Illegal argument exception on table storage nodo-verify-ko-events msg ingestion"));
+    }
+
+
+    @SuppressWarnings("unchecked")
+    @Test
+    @SneakyThrows
+    void runKo_invalidBlobStoring() {
+        // mocking objects
+        ExecutionContext context = mock(ExecutionContext.class);
+        Logger logger = Logger.getLogger("NodoVerifyKOEventToTableStorage-test-logger");
+        LogHandler logHandler = new LogHandler();
+        logger.addHandler(logHandler);
+        when(context.getLogger()).thenReturn(logger);
+
+        // generating input
+        String eventInStringForm = TestUtil.readStringFromFile("events/event_ko_3.json");
+        List<String> events = new ArrayList<>();
+        events.add(eventInStringForm);
+        Map<String, Object>[] properties = new HashMap[1];
+        properties[0] = new HashMap<>();
+        properties[0].put("prop1_without_dash", true);
+        properties[0].put("prop1-with-dash", "1");
+
+        // execute logic
+        NodoVerifyKOEventToTableStorage function = new NodoVerifyKOEventToTableStorage();
+        assertThrows(AppException.class, () -> function.processNodoVerifyKOEvent(events, properties, context));
+
+        // test assertion
+        assertTrue(logHandler.getLogs().contains("[ALERT][VerifyKOToTS] Persistence Exception - Could not save event body of"));
     }
 
     @Test
@@ -228,7 +323,7 @@ class NodoVerifyKOEventToTableStorageTest {
 
         // execute logic
         NodoVerifyKOEventToTableStorage function = spy(NodoVerifyKOEventToTableStorage.class);
-        function.processNodoVerifyKOEvent(events, null, context);
+        assertThrows(AppException.class, () -> function.processNodoVerifyKOEvent(events, null, context));
 
         // test assertion
         assertTrue(logHandler.getLogs().contains("[ALERT][VerifyKOToTS] AppException - Generic exception on table storage nodo-verify-ko-events msg ingestion"));

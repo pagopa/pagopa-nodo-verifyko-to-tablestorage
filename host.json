@@ -28,7 +28,7 @@
   "logging": {
     "logLevel": {
       "default": "Error",
-      "Function.EventHubNodoVerifyKOEventToTSProcessor": "Warning"
+      "Function.EventHubNodoVerifyKOEventToTSProcessor": "Information"
     },
     "applicationInsights": {
       "samplingSettings": {

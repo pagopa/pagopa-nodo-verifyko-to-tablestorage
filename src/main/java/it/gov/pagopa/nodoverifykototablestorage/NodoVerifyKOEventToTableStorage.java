@@ -13,6 +13,7 @@ import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.microsoft.azure.functions.ExecutionContext;
 import com.microsoft.azure.functions.annotation.*;
+import it.gov.pagopa.nodoverifykototablestorage.exception.AppException;
 import it.gov.pagopa.nodoverifykototablestorage.exception.BlobStorageUploadException;
 import it.gov.pagopa.nodoverifykototablestorage.model.BlobBodyReference;
 import it.gov.pagopa.nodoverifykototablestorage.util.Constants;
@@ -24,10 +25,12 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
+import java.util.stream.Collectors;
 
 /**
  * Azure Functions with Azure Event Hub trigger.
@@ -35,11 +38,14 @@ import java.util.regex.Matcher;
  */
 public class NodoVerifyKOEventToTableStorage {
 
+	private static final Integer MAX_RETRY_COUNT = 7;
+
 	private static TableServiceClient tableServiceClient = null;
 
 	private static BlobContainerClient blobContainerClient = null;
 
 	@FunctionName("EventHubNodoVerifyKOEventToTSProcessor")
+	@ExponentialBackoffRetry(maxRetryCount = 7, maximumInterval = "24:00:00", minimumInterval = "00:10:00") // retry after 10m, 20m, 40m, 1h20m, 2h40m, 5h20m, 10h40m, for a total of 21h more or less from start retrying to end
     public void processNodoVerifyKOEvent (
 			@EventHubTrigger(
 					name = "NodoVerifyKOEvent",
@@ -50,9 +56,18 @@ public class NodoVerifyKOEventToTableStorage {
 			@BindingName(value = "PropertiesArray") Map<String, Object>[] properties,
 			final ExecutionContext context) {
 
+		String errorCause = null;
+		boolean isPersistenceOk;
+		int retryIndex = context.getRetryContext() == null ? -1 : context.getRetryContext().getRetrycount();
+
 		Logger logger = context.getLogger();
-		logger.log(Level.INFO, () -> String.format("Persisting [%d] events...", events.size()));
+		logger.log(Level.FINE, () -> String.format("Persisting [%d] events...", events.size()));
 		String rowKey = "";
+
+		if (retryIndex == MAX_RETRY_COUNT) {
+			logger.log(Level.WARNING, () -> String.format("[ALERT][LAST RETRY][VerifyKOToTS] Performing last retry for event ingestion: InvocationId [%s], Events: %s", context.getInvocationId(), events));
+		}
+
 		try {
 			if (events.size() == properties.length) {
 				Map<String, List<TableTransactionAction>> partitionedEvents = new HashMap<>();
@@ -102,22 +117,49 @@ public class NodoVerifyKOEventToTableStorage {
 					addToBatch(partitionedEvents, eventToBeStored);
 				}
 
+				logger.log(Level.INFO, () -> String.format("Performing event ingestion: InvocationId [%s], Retry Attempt [%d], Events: %s", context.getInvocationId(), retryIndex, extractTraceForEventsToPersist(partitionedEvents)));
+
 				// save all events in the retrieved batch in the storage
-				persistEventBatch(logger, partitionedEvents);
+				isPersistenceOk = persistEventBatch(logger, partitionedEvents);
 			} else {
-				logger.log(Level.SEVERE, () -> String.format("[ALERT][VerifyKOToTS] AppException - Error processing events, lengths do not match: [events: %d - properties: %d]", events.size(), properties.length));
+				isPersistenceOk = false;
+				errorCause = String.format("[ALERT][VerifyKOToTS] AppException - Error processing events, lengths do not match: [events: %d - properties: %d]", events.size(), properties.length);
 			}
 		} catch (BlobStorageUploadException e) {
-			String finalRowKey = rowKey;
-			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] Persistence Exception - Could not save event body of " + finalRowKey + " on Azure Blob Storage, error: " + e);
+			isPersistenceOk = false;
+			errorCause = "[ALERT][VerifyKOToTS] Persistence Exception - Could not save event body of " + rowKey + " on Azure Blob Storage, error: " + e;
 		} catch (IllegalArgumentException e) {
-			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToDS] AppException - Illegal argument exception on table storage nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e);
+			isPersistenceOk = false;
+			errorCause = "[ALERT][VerifyKOToTS] AppException - Illegal argument exception on table storage nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e;
 		} catch (IllegalStateException e) {
-			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToDS] AppException - Missing argument exception on nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e);
+			isPersistenceOk = false;
+			errorCause = "[ALERT][VerifyKOToTS] AppException - Missing argument exception on nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e;
 		} catch (Exception e) {
-			logger.log(Level.SEVERE, () -> "[ALERT][VerifyKOToTS] AppException - Generic exception on table storage nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e.getMessage());
+			isPersistenceOk = false;
+			errorCause =  "[ALERT][VerifyKOToTS] AppException - Generic exception on table storage nodo-verify-ko-events msg ingestion at " + LocalDateTime.now() + " : " + e.getMessage();
+		}
+
+		if (!isPersistenceOk) {
+			String finalErrorCause = errorCause;
+			logger.log(Level.SEVERE, () -> finalErrorCause);
+			throw new AppException(errorCause);
 		}
     }
+
+	private static String extractTraceForEventsToPersist(Map<String, List<TableTransactionAction>> eventsToPersist) {
+		return Arrays.toString(eventsToPersist.values().stream()
+				.map(tableTransactionActions -> Arrays.toString(tableTransactionActions.stream()
+						.map(transaction -> {
+							TableEntity event = transaction.getEntity();
+							String partitionKey = event.getPartitionKey();
+							String rowKey = event.getRowKey();
+							Map<String, Object> props = event.getProperties();
+							Long eventTimestamp = getEventField(props, Constants.TIMESTAMP_TABLESTORAGE_EVENT_FIELD, Long.class, -1L);
+							return String.format("{PartitionKey: %s, RowKey: %s, EventTimestamp: %d}", partitionKey, rowKey, eventTimestamp);
+						})
+						.toArray()))
+				.toArray());
+	}
 
 	private String fixDateTime(String faultBeanTimestamp) {
 		int dotIndex = faultBeanTimestamp.indexOf('.');
@@ -132,7 +174,8 @@ public class NodoVerifyKOEventToTableStorage {
 		return faultBeanTimestamp;
 	}
 
-	private <T> T getEventField(Map<String, Object> event, String name, Class<T> clazz, T defaultValue) {
+	@SuppressWarnings({"rawtypes"})
+	private static <T> T getEventField(Map<String, Object> event, String name, Class<T> clazz, T defaultValue) {
 		T field = null;
 		List<String> splitPath = List.of(name.split("\\."));
 		Map eventSubset = event;
@@ -215,7 +258,8 @@ public class NodoVerifyKOEventToTableStorage {
 				getEventField(event, Constants.ID_EVENT_FIELD, String.class, Constants.NA);
 	}
 
-	private void persistEventBatch(Logger logger, Map<String, List<TableTransactionAction>> partitionedEvents) {
+	private boolean persistEventBatch(Logger logger, Map<String, List<TableTransactionAction>> partitionedEvents) {
+		AtomicBoolean isOk = new AtomicBoolean(true);
 		TableClient tableClient = getTableServiceClient().getTableClient(Constants.TABLE_NAME);
 		AtomicReference<StringJoiner> stringJoiner = new AtomicReference<>(new StringJoiner(","));
 		AtomicReference<String> finalCommaSeparatedString = new AtomicReference<>("");
@@ -226,9 +270,11 @@ public class NodoVerifyKOEventToTableStorage {
 				tableClient.submitTransaction(values);
 				stringJoiner.set(new StringJoiner(","));
 			} catch (Exception e) {
+				isOk.set(false);
 				logger.log(Level.SEVERE, e, () -> "[ALERT][VerifyKOToTS] Persistence Exception - Could not save " + values.size() + " events (partition [" + partition + "], rowKeys range [" + finalCommaSeparatedString + "]) on Azure Table Storage, error: " + e.getMessage());
 			}
 		});
-		logger.info("Done processing events");
+		logger.log(Level.FINE, () -> "Done processing events");
+		return isOk.get();
 	}
 }
