@@ -118,7 +118,7 @@ jobs:
 
   deploy_azure_fn:
     name: Deploy Azure function
-    needs: [ setup, set_image_name, release, build-and-push ]
+    needs: [ setup, release, build-and-push ]
     if: ${{ always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     strategy:
       matrix:
