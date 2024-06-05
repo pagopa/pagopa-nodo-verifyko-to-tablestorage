@@ -33,6 +33,9 @@ hs_err_pid*
 # macOS
 .DS_Store
 
+# Terraform
+**/.terraform/
+
 # Azure Functions
 local.settings.json
 bin/
