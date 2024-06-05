@@ -128,7 +128,7 @@ jobs:
     with:
       environment: ${{ matrix.environment }}
       target: ${{ needs.setup.outputs.environment }}
-      registry_image: ${{ needs.release.outputs.registry_image | needs.setup.outputs.registry_image }}
+      registry_image: ${{ needs.release.outputs.registry_image || needs.setup.outputs.registry_image }}
 
   notify:
     name: Notify
