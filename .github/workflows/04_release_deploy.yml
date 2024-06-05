@@ -73,7 +73,6 @@ jobs:
     environment: ${{ inputs.environment }}
     outputs:
       version: ${{ steps.release.outputs.version }}
-      registry_image: ${{ steps.get_image.outputs.registry_image }}
     steps:
       - name: Make Release
         id: release
@@ -83,9 +82,6 @@ jobs:
           github_token: ${{ secrets.BOT_TOKEN_GITHUB }}
           beta: false
 
-      - name: Set image name from container registry
-        id: get_image
-        run: echo "registry_image=${{vars.CONTAINER_REGISTRY_IMAGE}}:${{steps.release.outputs.version}}" >> $GITHUB_OUTPUT
 
   build-and-push:
     name: Build and Push Docker Image
@@ -101,6 +97,16 @@ jobs:
           branch: ${{ github.ref_name}}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ needs.release.outputs.version }}
+
+  set_image_name:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    outputs:
+      registry_image: ${{ steps.get_image.outputs.registry_image }}
+    steps:
+      - name: Set image name from container registry
+        id: get_image
+        run: echo "registry_image=${{vars.CONTAINER_REGISTRY_IMAGE}}:${{steps.release.outputs.version}}" >> $GITHUB_OUTPUT
 
   deploy_azure_fn:
     name: Deploy Azure function
