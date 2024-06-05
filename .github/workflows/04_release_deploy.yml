@@ -108,7 +108,7 @@ jobs:
     steps:
       - name: Set image name from container registry
         id: get_image
-        run: echo "registry_image=${{vars.CONTAINER_REGISTRY_IMAGE}}:${{steps.release.outputs.version}}" >> $GITHUB_OUTPUT
+        run: echo "registry_image=${{vars.CONTAINER_REGISTRY_IMAGE}}:${{needs.release.outputs.version}}" >> $GITHUB_OUTPUT
 
   deploy_azure_fn:
     name: Deploy Azure function
