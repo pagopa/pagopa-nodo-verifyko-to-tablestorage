@@ -77,7 +77,7 @@ jobs:
         id: get_image_from_tag
         if: ${{ env.IS_GIT_TAG == '1' && (env.ENVIRONMENT == 'uat' || env.ENVIRONMENT == 'prod') }}
         shell: bash
-        run: echo "registry_image=${{vars.CONTAINER_REGISTRY_IMAGE}}:${{ github.ref_name }}" >> $GITHUB_OUTPUT
+        run: echo "registry_image=ghcr.io/pagopa/pagopa-nodo-verifyko-to-tablestorage:${{ github.ref_name }}" >> $GITHUB_OUTPUT
 
   release:
     name: Create a New Release
@@ -99,7 +99,7 @@ jobs:
 
       - name: Set image name from container registry
         id: get_image
-        run: echo "registry_image=${{vars.CONTAINER_REGISTRY_IMAGE}}:${{steps.release.outputs.version}}" >> $GITHUB_OUTPUT
+        run: echo "registry_image=ghcr.io/pagopa/pagopa-nodo-verifyko-to-tablestorage:${{steps.release.outputs.version}}" >> $GITHUB_OUTPUT
 
   build-and-push:
     name: Build and Push Docker Image
