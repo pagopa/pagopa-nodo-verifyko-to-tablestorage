@@ -5,7 +5,7 @@
 
     <groupId>it.gov.pagopa</groupId>
     <artifactId>nodoverifykototablestorage</artifactId>
-    <version>0.1.6-1-NOD-933-verify-ko-lost-events</version>
+    <version>0.1.7</version>
     <packaging>jar</packaging>
 
     <name>Nodo Verify KO to datastore Fn</name>
