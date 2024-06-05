@@ -70,7 +70,7 @@ jobs:
         id: is_git_tag
         shell: bash
         run: |
-          echo "IS_GIT_TAG=$(git tag --list | grep \"${{ github.ref_name }}\" | wc -l | bc -l)" >> $GITHUB_ENV
+          echo "IS_GIT_TAG=$(git tag --list | grep ${{ github.ref_name }} | wc -l | bc -l)" >> $GITHUB_ENV
 
       # set registry image if in uat|prod env and deploy from specific tag
       - name: Extract image from tag
