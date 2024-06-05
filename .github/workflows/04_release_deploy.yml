@@ -55,6 +55,7 @@ jobs:
     outputs:
       semver: ${{ steps.semver_setup.outputs.semver }}
       environment: ${{ steps.semver_setup.outputs.environment }}
+      registry_image: ${{ steps.get_image_from_tag.outputs.registry_image }}
     steps:
       - name: Semver setup
         id: semver_setup
@@ -65,22 +66,40 @@ jobs:
       # Set deploy variables
       - run: echo "ENV_SHORT=$(echo ${{steps.semver_setup.outputs.environment}} | cut -c1-1)" >>  $GITHUB_ENV
 
+      - name: Branch or tag selection
+        id: is_git_tag
+        shell: bash
+        run: |
+          echo "IS_GIT_TAG=$(git tag --list | grep \"${{ github.ref_name }}\" | wc -l | bc -l)" >> $GITHUB_ENV
+
+      # set registry image if in uat|prod env and deploy from specific tag
+      - name: Extract image from tag
+        id: get_image_from_tag
+        if: ${{ env.IS_GIT_TAG == '1' && (env.ENVIRONMENT == 'uat' || env.ENVIRONMENT == 'prod') }}
+        shell: bash
+        run: echo "registry_image=${{vars.CONTAINER_REGISTRY_IMAGE}}:${{ github.ref_name }}" >> $GITHUB_OUTPUT
+
   release:
     name: Create a New Release
     runs-on: ubuntu-latest
     needs: [setup]
+    if: ${{ needs.setup.outputs.semver != 'skip' }}
     environment: ${{ inputs.environment }}
     outputs:
       version: ${{ steps.release.outputs.version }}
+      registry_image: ${{ steps.get_image.outputs.registry_image }}
     steps:
       - name: Make Release
         id: release
-        uses: pagopa/github-actions-template/maven-release@main
+        uses: pagopa/github-actions-template/maven-release@v1.5.4
         with:
           semver: ${{ needs.setup.outputs.semver }}
           github_token: ${{ secrets.BOT_TOKEN_GITHUB }}
           beta: false
 
+      - name: Set image name from container registry
+        id: get_image
+        run: echo "registry_image=${{vars.CONTAINER_REGISTRY_IMAGE}}:${{steps.release.outputs.version}}" >> $GITHUB_OUTPUT
 
   build-and-push:
     name: Build and Push Docker Image
@@ -97,18 +116,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ needs.release.outputs.version }}
 
-  set_image_name:
-    name: Get image name
-    needs: [setup, release, build-and-push]
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
-    outputs:
-      registry_image: ${{ steps.get_image.outputs.registry_image }}
-    steps:
-      - name: Set image name from container registry
-        id: get_image
-        run: echo "registry_image=${{vars.CONTAINER_REGISTRY_IMAGE}}:${{needs.release.outputs.version}}" >> $GITHUB_OUTPUT
-
   deploy_azure_fn:
     name: Deploy Azure function
     needs: [ setup, set_image_name, release, build-and-push ]
@@ -121,7 +128,7 @@ jobs:
     with:
       environment: ${{ matrix.environment }}
       target: ${{ needs.setup.outputs.environment }}
-      registry_image: ${{ needs.release.outputs.registry_image }}
+      registry_image: ${{ needs.release.outputs.registry_image | needs.setup.outputs.registry_image }}
 
   notify:
     name: Notify
