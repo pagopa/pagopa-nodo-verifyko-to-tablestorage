@@ -100,7 +100,7 @@ jobs:
 
   set_image_name:
     name: Get image name
-    needs: [setup]
+    needs: [setup, release, build-and-push]
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     outputs:
