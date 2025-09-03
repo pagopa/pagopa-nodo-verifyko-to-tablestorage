@@ -8,7 +8,7 @@ terraform {
     }
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "3.45.0"
+      version = ">= 3.116.0, < 4.0.0"
     }
     github = {
       source  = "integrations/github"
@@ -20,7 +20,12 @@ terraform {
 }
 
 provider "azurerm" {
-  features {}
+  skip_provider_registration = true
+  features {
+    key_vault {
+      purge_soft_delete_on_destroy = false
+    }
+  }
 }
 
 provider "github" {
