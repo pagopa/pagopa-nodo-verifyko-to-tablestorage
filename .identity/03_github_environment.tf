@@ -35,11 +35,7 @@ locals {
     "FUNCTION_APP_NAME": local.function_deployment.app_name,
     "FUNCTION_RESOURCE_GROUP": local.function_deployment.resource_group,
     "NAMESPACE" : local.domain,
-  }
-  repo_secrets = {
-    "SONAR_TOKEN" : data.azurerm_key_vault_secret.key_vault_sonar.value,
-    "BOT_TOKEN_GITHUB" : data.azurerm_key_vault_secret.key_vault_bot_token.value,
-    "SLACK_WEBHOOK_URL": data.azurerm_key_vault_secret.key_vault_slack_webhook_url.value
+    "WORKLOAD_IDENTITY_ID": data.azurerm_user_assigned_identity.workload_identity_clientid.client_id
   }
 }
 
@@ -59,7 +55,6 @@ resource "github_actions_environment_secret" "github_environment_runner_secrets"
 # ENV Variables #
 #################
 
-
 resource "github_actions_environment_variable" "github_environment_runner_variables" {
   for_each      = local.env_variables
   repository    = local.github.repository
@@ -72,18 +67,31 @@ resource "github_actions_environment_variable" "github_environment_runner_variab
 # Secrets of the Repository #
 #############################
 
-
-resource "github_actions_secret" "repo_secrets" {
-  for_each        = local.repo_secrets
-  repository      = local.github.repository
-  secret_name     = each.key
-  plaintext_value = each.value
+#tfsec:ignore:github-actions-no-plain-text-action-secrets # not real secret
+resource "github_actions_secret" "secret_sonar_token" {
+  repository       = local.github.repository
+  secret_name      = "SONAR_TOKEN"
+  plaintext_value  = data.azurerm_key_vault_secret.key_vault_sonar.value
 }
 
+#tfsec:ignore:github-actions-no-plain-text-action-secrets #
+resource "github_actions_secret" "secret_bot_token" {
+  repository       = local.github.repository
+  secret_name      = "BOT_TOKEN_GITHUB"
+  plaintext_value  = data.azurerm_key_vault_secret.key_vault_bot_token.value
+}
+
+#tfsec:ignore:github-actions-no-plain-text-action-secrets # not real secret
+resource "github_actions_secret" "slack_webhook_url" {
+  repository       = local.github.repository
+  secret_name      = "SLACK_WEBHOOK_URL_DEPLOY"
+  plaintext_value  = data.azurerm_key_vault_secret.key_vault_deploy_slack_webhook.value
+}
 
 ############
 ## Labels ##
 ############
+
 resource "github_issue_label" "patch" {
   repository = local.github.repository
   name       = "patch"
